@@ -1,5 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:foxhunt/domain/target_matcher.dart';
+import 'package:foxhunt/domain/calibration_config.dart';
 import 'package:foxhunt/domain/rssi_processor.dart';
 import 'package:foxhunt/domain/signal_state_engine.dart';
 import 'package:foxhunt/data/scanner_repository.dart';
@@ -29,7 +30,9 @@ void main() {
 
   group('RssiProcessor', () {
     test('calculates EMA', () {
-      final processor = RssiProcessor(alpha: 0.5);
+      final processor = RssiProcessor(
+        config: const CalibrationConfig(medianWindowSize: 1, emaAlpha: 0.5),
+      );
       processor.processSample(-70);
       expect(processor.filteredRssi, -70.0);
       
@@ -39,22 +42,26 @@ void main() {
     });
 
     test('calculates trend', () {
-      final processor = RssiProcessor(alpha: 0.5);
+      final processor = RssiProcessor(
+        config: const CalibrationConfig(medianWindowSize: 1, emaAlpha: 0.5, trendDeltaThreshold: 1.0),
+      );
       processor.processSample(-70);
       processor.processSample(-50); // goes to -60.0
       
-      final trend = processor.calculateTrend(-70.0);
-      expect(trend, Trend.stronger);
+      final trend = processor.calculateTrend();
+      expect(trend, SignalTrend.improving);
     });
   });
 
   group('SignalStateEngine', () {
     test('maps correctly', () {
-      final engine = SignalStateEngine();
-      expect(engine.determineState(-80), SignalState.veryCold);
-      expect(engine.determineState(-70), SignalState.cold);
-      expect(engine.determineState(-42), SignalState.veryHot);
-      expect(engine.determineState(-30), SignalState.targetRange);
+      final engine = SignalStateEngine(
+        config: const CalibrationConfig(confirmationCount: 1),
+      );
+      expect(engine.processSample(-95), HuntingState.cold);
+      expect(engine.processSample(-85), HuntingState.warm);
+      expect(engine.processSample(-75), HuntingState.hot);
+      expect(engine.processSample(-68), HuntingState.veryHot);
     });
   });
 }
